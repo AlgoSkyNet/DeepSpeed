@@ -39,7 +39,7 @@ def _apply_forward_and_backward_to_tensors_only(module, forward_function, backwa
 
 class ZeROOrderedDict(OrderedDict):
 
-    def __init__(self, parent_module, *args, **kwargs):
+    def __init__(self, parent_module=None, *args, **kwargs):
         """A replacement for ``collections.OrderedDict`` to detect external ZeRO params.
 
         Args:
@@ -247,7 +247,6 @@ class DeepSpeedZeRoOffload(object):
         #reset step if in inference mode
         @instrument_w_nvtx
         def _start_of_forward_hook(module, *args):
-
             self.get_param_coordinator().reset_step()
 
         self.fwd_pre_hook = self.module.register_forward_pre_hook(_start_of_forward_hook)

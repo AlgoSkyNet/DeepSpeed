@@ -64,7 +64,7 @@ def offload_activation_fwd(graph: Graph, graph_id: int, nodes_to_offload_with_na
         with graph.inserting_after(offload_node):
             wait_node = graph.create_node('call_function',
                                           torch.ops.dc.wait_offload.default, (offload_node, graph_id, val_id), {},
-                                          name=f"wait_copy_{node.name}_{val_id}")
+                                          name=f"wait_copy_{offload_node.name}_{val_id}")
 
         output_node = get_output_node(graph)
         output_node.replace_input_with(node, wait_node)

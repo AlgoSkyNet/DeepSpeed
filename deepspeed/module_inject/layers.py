@@ -28,6 +28,14 @@ DS_IS_REPLACED_MODULE = 'ds_is_replaced_module'
 DS_TENSOR_MODEL_PARALLEL = 'tensor_model_parallel'
 
 
+# TODO (SW-232894): Remove WA below, once the LAZY mode is deprecated.
+def hpu_lazy_enabled():
+    if get_accelerator().device_name() == 'hpu':
+        import habana_frameworks.torch.hpu as thpu
+        return thpu.is_lazy()
+    return False
+
+
 def get_auto_tp_mode():
     global DEEPSPEED_AUTOTP_MODE
     return DEEPSPEED_AUTOTP_MODE
@@ -187,14 +195,17 @@ class TensorParallel_Layer(nn.Module, ABC):
         """
         super().__init__()
         self.support_training: bool = False
+        self.mp_group = mp_group
         if mp_group is not None:
-            self.mp_group = mp_group
             self.tp_world_size: int = dist.get_world_size(self.mp_group)
-            self.tp_index: int = dist.get_rank(mp_group)
+            self.tp_index: int = dist.get_rank(self.mp_group)
+        else:
+            self.tp_world_size: int = 1
+            self.tp_index: int = 0
 
-            # backward compatibility
-            self.world_size = self.tp_world_size
-            self.rank = self.tp_index
+        # backward compatibility
+        self.world_size = self.tp_world_size
+        self.rank = self.tp_index
 
         self.name = getattr(self, 'name', None)
         if kwargs.get('name') is not None:
@@ -435,12 +446,24 @@ class LinearAllreduce(TensorParallel_Layer):
                     return
                 if idx > 0:  # move bias to device at initialization
                     _partition = self.move(param).detach()
+                    # TODO (SW-232894): Remove WA below, once the LAZY mode is deprecated.
+                    if hpu_lazy_enabled():
+                        _partition = _partition.to(param.device)
+
+                    # TODO (SW-232894): Remove WA below, once the LAZY mode is deprecated.
+                    if hpu_lazy_enabled():
+                        _partition = _partition.to(param.device)
+
                     params_list[idx].data = _partition
                     return
 
                 _partition = torch.chunk(param, self.tp_world_size, dim=-1)[self.tp_index]
 
                 _partition = self.move(_partition).detach()
+
+                # TODO (SW-232894): Remove WA below, once the LAZY mode is deprecated.
+                if hpu_lazy_enabled():
+                    _partition = _partition.to(param.device)
 
                 params_list[idx].data = _partition
 
@@ -455,6 +478,11 @@ class LinearAllreduce(TensorParallel_Layer):
                                                 dim=1)[self.tp_index]
 
             _partition = self.move(_partition).detach()
+
+            # TODO (SW-232894): Remove WA below, once the LAZY mode is deprecated.
+            if hpu_lazy_enabled():
+                _partition = _partition.to(param.device)
+
             params_list[idx].data = _partition
 
 
@@ -510,6 +538,10 @@ class LinearLayer(TensorParallel_Layer):
 
             _partition = self.move(_partition).detach()
 
+            # TODO (SW-232894): Remove WA below, once the LAZY mode is deprecated.
+            if hpu_lazy_enabled():
+                _partition = _partition.to(param.device)
+
             params_list[idx].data = _partition
 
     def uneven_partition(self, params_list):
@@ -524,6 +556,10 @@ class LinearLayer(TensorParallel_Layer):
                                                 dim=0)[self.tp_index]
 
             _partition = self.move(_partition).detach()
+
+            # TODO (SW-232894): Remove WA below, once the LAZY mode is deprecated.
+            if hpu_lazy_enabled():
+                _partition = _partition.to(param.device)
 
             params_list[idx].data = _partition
 
@@ -571,6 +607,10 @@ class fused_LinearLayer(LinearLayer):
 
             _partition = self.move(_partition).detach()
 
+            # TODO (SW-232894): Remove WA below, once the LAZY mode is deprecated.
+            if hpu_lazy_enabled():
+                _partition = _partition.to(param.device)
+
             params_list[idx].data = _partition
 
 
@@ -587,12 +627,21 @@ class conv_LinearLayer(LinearLayer):
         _partition = weight.data.split(get_shard_size_list(weight.shape[0], self.tp_world_size, self.name),
                                        dim=1)[self.tp_index]
         _partition = self.move(_partition).detach()
+
+        # TODO (SW-232894): Remove WA below, once the LAZY mode is deprecated.
+        if hpu_lazy_enabled():
+            _partition = _partition.to(weight.device)
+
         weight.data = _partition
 
         if bias is not None:
             _partition = bias.data.split(get_shard_size_list(weight.shape[1], self.tp_world_size, self.name),
                                          dim=0)[self.tp_index]
             _partition = self.move(_partition).detach()
+
+            # TODO (SW-232894): Remove WA below, once the LAZY mode is deprecated.
+            if hpu_lazy_enabled():
+                _partition = _partition.to(bias.device)
 
             bias.data = _partition
 
@@ -644,6 +693,10 @@ class Conv_LinearALlreduce(LinearAllreduce):
                                      dim=1)[self.tp_index]
 
             _partition = self.move(_partition).detach()
+
+            # TODO (SW-232894): Remove WA below, once the LAZY mode is deprecated.
+            if hpu_lazy_enabled():
+                _partition = _partition.to(param.device)
 
             params_list[idx].data = _partition
 

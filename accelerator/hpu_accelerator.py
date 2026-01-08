@@ -301,6 +301,14 @@ class HPU_Accelerator(DeepSpeedAccelerator):
         else:
             return self.class_dict['NotImplementedBuilder'] if 'NotImplementedBuilder' in self.class_dict else None
 
+    #shall be removed once moving to torch.compile
+    def wrap_in_hpu_graph(self, module):
+        if self.hpu.is_lazy():
+            module = self.hpu.wrap_in_hpu_graph(module)
+        else:
+            print("Warning: hpu graphs in eager mode is not supported, ignoring")
+        return module
+
     def build_extension(self):
         from torch.utils.cpp_extension import BuildExtension
         return BuildExtension
@@ -309,6 +317,7 @@ class HPU_Accelerator(DeepSpeedAccelerator):
         return []
 
     def visible_devices_envs(self):
+        # TODO SW-195658: remove WA to not return HABANA_VISIBLE_MODULES once SW-195657 is resolved
         # Current way deepspeed set this env var is not applicable with all HPU instances
         # User has to follow instructions in:
         # https://docs.habana.ai/en/latest/PyTorch/Reference/PT_Multiple_Tenants_on_HPU/Multiple_Workloads_Single_Docker.html

@@ -82,6 +82,8 @@ class TestMoE(DistributedTest):
         # E+D -- ep_size = 2
         # E only -- ep_size = 4
         model = SimpleMoEModel(hidden_dim, ep_size=ep_size, use_residual=use_residual)
+        #TODO SW-179530: remove workaround when issue with lazy mode is resolved (see SW-179530).
+        model.to(get_accelerator().device_name())
         param_group = {'params': [p for p in model.parameters()], 'name': 'random-unique-name'}
         params = split_params_into_different_moe_groups_for_optimizer(param_group)
         optimizer = torch.optim.AdamW(params=params)

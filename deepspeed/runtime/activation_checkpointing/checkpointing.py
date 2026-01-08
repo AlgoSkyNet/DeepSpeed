@@ -584,6 +584,9 @@ class CheckpointFunction(torch.autograd.Function):
         # removing pointers to the contiguous buffer memory
         # so that they can be garbage collected once the checkpoints
         # have been used
+        if grads[0].device.type == 'hpu':
+            import habana_frameworks.torch as htorch
+            htorch.core.mark_step()
         if SYNCHRONIZE:
             get_accelerator().synchronize()
         if PROFILE_TIME:
@@ -701,7 +704,7 @@ class CheckpointFunction(torch.autograd.Function):
         return tuple(ret_list)
 
 
-def non_reentrant_checkpoint(function, *args):
+def non_reentrant_checkpoint(function, *args, **kwargs):
     """This function is union of `torch.utils.checkpoint._checkpoint_without_reentrant` and `CheckpointFunction` in this module
 
     This function is aim to solve the back probagation error raised from all input requires no grad.
@@ -945,7 +948,7 @@ def non_reentrant_checkpoint(function, *args):
 
 
 @compiler.disable  # WA from Pytorch repo for compile + zero 3 accuracy issue
-def checkpoint(function, *args):
+def checkpoint(function, *args, **kwargs):
     """Checkpoint a model or part of the model.
     This has been directly copied from torch.utils.checkpoint. """
 

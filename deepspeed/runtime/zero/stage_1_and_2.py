@@ -1295,10 +1295,9 @@ class DeepSpeedZeroOptimizer(ZeROOptimizer):
         dest_tensor = self.single_partition_of_fp32_groups[i].grad.view(-1).narrow(0, dest_offset, num_elements)
 
         grad_accum = self.get_param_gradient_attribute(param)
-        if grad_accum is None:
-            src_tensor = grad_accum.view(-1).narrow(0, source_offset, num_elements)
-        else:
-            src_tensor = grad_accum.view(-1).narrow(0, source_offset, num_elements)
+        assert grad_accum is not None
+
+        src_tensor = grad_accum.view(-1).narrow(0, source_offset, num_elements)
         if not self.fp16_master_weights_and_gradients:
             src_tensor = src_tensor.float()
 
@@ -2126,10 +2125,11 @@ class DeepSpeedZeroOptimizer(ZeROOptimizer):
 
     # Promote loss scale so it can be retrieved or set via "fp16_optimizer_instance.loss_scale"
     def _get_loss_scale(self):
+        # TODO: SW-187114 Remove WA: cast self.loss_scale to float
         if self.custom_loss_scaler:
-            return self.external_loss_scale
+            return float(self.external_loss_scale)
         else:
-            return self.loss_scaler.cur_scale
+            return float(self.loss_scaler.cur_scale)
 
     def _set_loss_scale(self, value):
         self.loss_scaler.cur_scale = value
@@ -2334,6 +2334,11 @@ class DeepSpeedZeroOptimizer(ZeROOptimizer):
 
     def _load_universal_checkpoint(self, checkpoint_folder, load_optimizer_states, load_from_fp32_weights):
         self.load_hp_checkpoint_state_from_checkpoint_dir("bit16_groups", checkpoint_folder)
+
+    @property
+    def param_groups(self):
+        """Forward the wrapped optimizer's parameters."""
+        return self.optimizer.param_groups
 
     def _load_global_state(self, sd):
         self.loss_scaler = sd.get(LOSS_SCALER, self.loss_scaler)

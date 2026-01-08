@@ -25,6 +25,7 @@ from deepspeed.runtime.zero.partition_parameters import ZeroParamStatus
 from deepspeed.utils.zero_to_fp32 import load_state_dict_from_zero_checkpoint
 from deepspeed.runtime.zero.utils import ZeRORuntimeException
 from deepspeed.accelerator import get_accelerator
+from unit.util import hpu_lazy_enabled
 
 
 def run_unbalanced_gradients(model, data_loader):
@@ -294,6 +295,8 @@ class TestZeroToFP32(DistributedTest):
         world_size = dist.get_world_size()
         n_layers = world_size * 2
         model = MyModel(hidden_dim=hidden_dim, n_layers=n_layers, freeze_params=freeze_params)
+        if hpu_lazy_enabled():
+            model.to(get_accelerator().device_name())
 
         optim_groups = [
             {
@@ -1005,8 +1008,8 @@ class TestZero3InitForParentWeightInitialization(DistributedTest):
 
             def __init__(self) -> None:
                 super().__init__()
-
-                self.linear = Linear(12, 1)
+                dev = get_accelerator().device_name()
+                self.linear = Linear(12, 1, device=dev)
 
                 self.apply(self.__init_weights)
 
@@ -1552,6 +1555,9 @@ class TestZeroOffloadOptim(DistributedTest):
         hidden_dim = 10
 
         model = SimpleModel(hidden_dim)
+        if hpu_lazy_enabled():
+            device = get_accelerator().current_device_name()
+            model.to(device)
 
         optimizer = torch.optim.Adam(model.parameters())
 

@@ -263,7 +263,7 @@ class TestInitNoOptimizer(DistributedTest):
                                         total_samples=5,
                                         hidden_dim=hidden_dim,
                                         device=model.device,
-                                        dtype=dtype)
+                                        dtype=torch.half)
         for n, batch in enumerate(data_loader):
             loss = model(batch[0], batch[1])
             with pytest.raises(AssertionError):

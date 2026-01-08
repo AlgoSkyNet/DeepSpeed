@@ -14,6 +14,7 @@ from deepspeed import comm as dist
 from deepspeed.utils import groups, z3_leaf_parameter
 
 from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
+import deepspeed.runtime.compiler as compiler
 from deepspeed.runtime.base_optimizer import ZeROOptimizer
 from deepspeed.utils import logger
 from deepspeed.utils.torch import register_grad_hook
@@ -1641,16 +1642,11 @@ class DeepSpeedZeroOptimizer_Stage3(ZeROOptimizer):
 
         tensor_to_allreduce.div_(dist.get_world_size(group=self.dp_process_group) / float(self.sequence_parallel_size))
 
-        if rank is None:
-            #    "All Reducing"
-            dist.all_reduce(tensor_to_allreduce, group=self.dp_process_group)
-        else:
-            global_rank = dist.get_global_rank(self.dp_process_group, rank)
-            dist.reduce(tensor_to_allreduce, global_rank, group=self.dp_process_group)
+        #    "All Reducing"
+        dist.all_reduce(tensor_to_allreduce, group=self.dp_process_group)
 
         if communication_data_type != tensor.dtype and tensor is not tensor_to_allreduce:
-            if rank is None or rank == dist.get_rank(group=self.dp_process_group):
-                tensor.copy_(tensor_to_allreduce)
+            tensor.copy_(tensor_to_allreduce)
 
         return tensor
 
@@ -1889,6 +1885,8 @@ class DeepSpeedZeroOptimizer_Stage3(ZeROOptimizer):
                 norm_groups.append(self.get_grad_norm_direct(self.averaged_gradients[i], self.fp16_groups[i]))
         return norm_groups
 
+    # TODO: remove after SW-207183 is resolved
+    @compiler.disable
     @instrument_w_nvtx
     def _prepare_fp32_grad_for_sub_group(self, sub_group_id):
         partition_id = dist.get_rank(group=self.dp_process_group)
@@ -2579,9 +2577,10 @@ class DeepSpeedZeroOptimizer_Stage3(ZeROOptimizer):
     # Promote loss scale so it can be retrieved or set via "fp16_optimizer_instance.loss_scale"
     def _get_loss_scale(self):
         if self.custom_loss_scaler:
-            return self.external_loss_scale
+            # TODO: SW-187114 Remove WA: cast self.loss_scale to float
+            return float(self.external_loss_scale)
         else:
-            return self.loss_scaler.cur_scale
+            return float(self.loss_scaler.cur_scale)
 
     def _set_loss_scale(self, value):
         self.loss_scaler.cur_scale = value
